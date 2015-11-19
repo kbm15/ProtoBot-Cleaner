@@ -1,0 +1,99 @@
+#include <Ultrasonic.h>    // Importamos las librerias del modulo de ultrasonidos
+#include <Servo.h>    // Importamos las librerias que controlan el servo
+
+Ultrasonic ultraleft(3,4);    // Definimos los objetos Ultrasonic
+Ultrasonic ultraright(5,6);    // Pines del sensor: Trigger pin, Echo pin
+Servo servoR;    // Definimos los objetos Servo
+Servo servoL;
+int servoPinR =  10;    // Pines del servo
+int servoPinL = 9;
+int servoStopR = 95;    // Angulo del servo para parar
+int servoStopL = 79;
+long randNumber;    // Guardamos memoria para el numero aleatorio
+int terrorLevel = 0;    // Nivel de terror
+unsigned long time;    // Inicializamos variable para guardar el tiempo
+long fiveSec = 5000;    // Intervalo de tiempo para entrar en modo de terror
+long terrorAt = 0;    // Valor del tiempo en cada momento de panico
+
+
+void setup() {
+  Serial.begin(9600);    // Recibimos datos del puerto serie
+  servoR.attach(servoPinR);    // Asociamos pines a los Servo
+  servoL.attach(servoPinL);
+  randomSeed(analogRead(0));    // Creamos una semilla para numeros aleatorios a partir de la lectura del pin 1
+}
+
+// DEFINIMOS LA FUNCION terrorMode, QUE NOS PERMITE DEFINIR EL NIVEL DE TERROR DEPENDIENDO DEL ENTORNO
+
+int terrorMode(int left, int right, int current){
+  int mode = 0;    // Inicializamos el modo, valor que devolveremos
+  time = millis();    // Guardamos el tiempo 
+  
+  if (current >= 999){    // Comprobamos si la anterior ha sido una situacion de terror maximo
+    current = 0;    // Reiniciamos el contador, pues el robot habra dado media vuelta
+  }
+  
+  if (left <=8 || right <=8){    // Situacion de obstaculo tipica, a 8cm del obstaculo
+    mode = current + (50 / ((long(time) - terrorAt - (50 * (current / 10))))) + 1;
+        /* Explicare la formula, ya que es el centro del algoritmo. Tomamos el valor actual de terror, al
+        cual añadimos el tiempo de reaccion multiplicado por diez, lo cual nos da mayor precision (genera
+        una escala de terror sobre 100 en vez de sobre 10), dividido por la diferencia entre situaciones 
+        de panico, a la cual restamos el retraso producido en (1), el cual  se rige por la formula "delay(50 * ((val) / 10));" 
+        Le sumamos 1 para el caso del primer momento de panico, en el cual el resto de operaciones da cero.*/
+    terrorAt = time;    // Tomamos el nuevo instante de panico
+  }
+  else{
+    if (current >= 1){    // No hay ningun obstaculo      
+       if (current - (long(time) - terrorAt) / 2000 >= 0){    // Comprueba si podemos restar sin llegar a num negativos
+         mode = current - (long(time) - terrorAt) / 2000;    // Damos el margen de dos segundos para empezar a restar        
+       }
+       else{
+         mode = 0;    // Reseteamos si la resta fuera a dar negativo
+       }       
+    }
+    else{
+      return mode;
+    }
+  }
+
+  if (mode >= 100){    // Entrar en modo de terror absoluto
+    return 999;
+  }
+  else{
+    return mode;
+  }
+}
+
+// DEFINIMOS LA FUNCION navigate, ENCARGADA DEL MOVIMIENTO DEL ROBOT DEPENDIENDO DEL ENTORNO
+
+void navigate(int left, int right, int val){
+   switch (val) {
+    case 0:    // Cuando el entorno no tiene ningun obstaculo peligroso
+      randNumber = random(2);    // Generamos numeros aleatorios para humanizar el movimiento del robot,
+                                  // permitiendo que se de cuenta de esa pared tan obvia para nosotros.
+      servoL.write(servoStopL  + (19 * right / 50) - randNumber);    
+      servoR.write(servoStopR  + (24 * left / 50) - randNumber);    // Ese aumento sobre 24 es porque la diferencia entre los dos
+      break;                                                         // provocaba que se fuera hacia la derecha.
+    case 999:    // Situacion de terror absoluto; dara media vuelta
+      servoL.write(servoStopL  + 19);
+      servoR.write(servoStopR  - 24);
+      delay(1000);
+      break;
+    default:    // Cuando el entorno tiene algun obstaculo que evitar girara de acuerdo a las distancias medidas
+      servoL.write(servoStopL - 19 + (38 * right / 25));  
+      servoR.write(servoStopR - 24 + (28 * left / 25));
+// (1) 
+      delay(50 * ((val) / 10));    // (1)
+      
+  }
+}
+
+void loop(){
+  
+    int measureLeft = ultraleft.Ranging(CM);    // Medimos la distancia con ultrasonidos
+    int measureRight = ultraright.Ranging(CM);  
+    
+    terrorLevel = terrorMode(measureLeft, measureRight, terrorLevel);    // Devuelve ell nivel de terror
+    
+    navigate(measureLeft, measureRight, terrorLevel);    // Ejecuta la funcion de movimiento  
+}

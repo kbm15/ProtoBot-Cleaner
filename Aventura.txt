@@ -1,0 +1,125 @@
+#include <Ultrasonic.h>    // Importamos las librerias del modulo de ultrasonidos
+#include <Servo.h>    // Importamos las librerias que controlan el servo
+
+Ultrasonic ultraleft(3,4); // Trigger pin, echo pin
+Ultrasonic ultraright(5,6);
+Servo servoR;    // Definimos los objetos Servo
+Servo servoL;
+int servoPinR =  10;    // Pines del servo
+int servoPinL = 9;
+int servoStopR = 95;    // Velocidad de parada
+int servoStopL = 79;
+long randNumber;    // Guardamos memoria para el numero aleatorio
+int Terror = 0;    // Nivel de terror
+long tiempo = 5 * 60 * 1000;  // Tiempo funcionando, cinco minutos
+
+void setup() {
+  Serial.begin(9600);    // Recibimos datos del puerto serie
+  servoR.attach(servoPinR);    // Asociamos pines a los Servo
+  servoL.attach(servoPinL);
+  randomSeed(analogRead(0));    // Creamos una semilla para numeros aleatorios a partir de la lectura del pin 1
+}
+
+// DEFINIMOS LA FUNCION terrorMode, QUE NOS PERMITE DEFINIR EL NIVEL DE TERROR DEPENDIENDO DEL ENTORNO
+
+int terrorMode(int left, int right, int current){
+  int mode = 0;    // Inicializamos el modo, valor que devolveremos
+  
+  if (current == 999){    // Comprobamos si la anterior ha sido una situacion de terror maximo
+    current = 0;
+  }
+  
+  if (left == right && left <= 8){    // Situacion de las esquinas y otros lugares peligrosos para el robot
+    mode = current + (32 / left);
+  }
+  else{
+     if (left <=10 || right <=10){    // Situacion de obstaculo tipica
+       mode = current +  2;
+     }
+     else{
+       if ( current >= 1){    // No hay ningun obstaculo
+          delay (100);
+          mode = current - 1;
+       }
+     }
+  }
+  if (mode >= 10 || millis() % tiempo == 0){ // Entrar en modo de terror absoluto
+    return 999;
+  }
+  else{
+    return mode;
+  }
+}
+
+// DEFINIMOS LA FUNCION navigate, ENCARGADA DEL MOVIMIENTO DEL ROBOT DEPENDIENDO DEL ENTORNO
+
+void navigate(int left, int right, int terror){
+   switch (terror) {
+    case 0:    // Cuando el entorno no tiene ningun obstaculo peligroso
+      randNumber = random(1);    // Generamos numeros aleatorios para humanizar el movimiento del robot,
+                                  // permitiendo que se de cuenta de esa pared tan obvia para nosotros.
+      servoL.write(servoStopL  + ( 19 * right / 50) - randNumber);
+      servoR.write(servoStopR  + ( 24 * left / 50) - randNumber);
+      break;
+    case 999:    // Situacion de panico 
+      servoL.write(servoStopL  + 19);
+      servoR.write(servoStopR  - 24);
+      delay(1000);
+      break;
+    default:    // Cuando el entorno tiene algun obstaculo que evitar
+      servoL.write(servoStopL - 19 + ( 38 * right / 50));
+      servoR.write(servoStopR - 24 + ( 48 * left / 50));
+      delay(100 * terror);
+  }
+}
+
+void loop(){
+  
+    int medirIzquierdo = ultraleft.Ranging(CM);    // Medimos la distancia con ultrasonidos
+    int medirDerecho = ultraright.Ranging(CM);  
+
+    Serial.println(Terror);
+    
+    Terror = terrorMode(medirIzquierdo, medirDerecho, Terror);
+    
+    navigate(medirIzquierdo, medirDerecho, Terror);
+    
+    
+}
+  
+  
+Carrera:
+
+#include <Ultrasonic.h>    // Importamos las librerias del modulo de ultrasonidos
+#include <Servo.h>    // Importamos las librerias que controlan el servo
+
+Ultrasonic ultraleft(3,4); // Trigger pin, echo pin
+Ultrasonic ultraright(5,6);
+Servo servoR;    // Definimos los objetos Servo
+Servo servoL;
+int servoPinR =  10;    // Pines del servo
+int servoPinL = 9;
+int servoStopR = 95;    // Velocidad de parada
+int servoStopL = 79;
+
+void setup() {
+  servoR.attach(servoPinR);    // Asociamos pines a los Servo
+  servoL.attach(servoPinL);
+}
+
+void loop(){
+  {
+    int medirIzquierdo = ultraleft.Ranging(CM);    // Medimos la distancia con ultrasonidos
+    int medirDerecho = ultraright.Ranging(CM);  
+    if (medirIzquierdo >=10 && medirDerecho >=10){    // Define el modo de crucero
+      servoL.write(servoStopL  + ( 19 * medirDerecho / 50));
+      servoR.write(servoStopR  + ( 24 * medirIzquierdo / 50));
+    }
+    else{                                              // Define el modo de anti choche
+      servoL.write(servoStopL - 19 + ( 38 * medirDerecho / 50));
+      servoR.write(servoStopR - 24 + ( 48 * medirIzquierdo / 50));
+      delay(200);  
+    }
+  }
+
+}
